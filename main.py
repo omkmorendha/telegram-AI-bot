@@ -1,4 +1,5 @@
 from telebot import TeleBot
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -176,6 +177,46 @@ def show_credits(message):
         cursor.close()
         conn.close()
 
+def process_recharge(message):
+    user_language = get_user_language(message.chat.id)
+    
+    try:
+        amount = 15
+        if amount <= 0:
+            bot.send_message(message.chat.id, "Invalid amount. Please enter a positive number.")
+            return
+
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE users
+            SET credits = credits + %s
+            WHERE telegram_id = %s
+            """,
+            (amount, str(message.chat.id))
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        success_message = get_message(user_language, "recharge_success_message").format(amount=amount)
+        bot.send_message(message.chat.id, success_message)
+
+    except Exception as e:
+        print(f"Error processing recharge: {e}")
+        failure_message = get_message(user_language, "failure_message")
+        bot.send_message(message.chat.id, failure_message)
+
+
+@bot.message_handler(commands=["recharge"])
+def recharge_credits(message):
+    user_language = get_user_language(message.chat.id)
+    recharge_message = get_message(user_language, "recharge_message")
+    bot.send_message(message.chat.id, recharge_message)
+    bot.register_next_step_handler(message, process_recharge(message))
+
+
 @bot.message_handler(commands=["start", "restart"])
 def start(message):
     if not user_exists(message.chat.id):
@@ -194,36 +235,48 @@ def menu(message):
     bot.send_message(message.chat.id, message_to_send)
 
 
+@bot.message_handler(commands=["recharge"])
+def recharge_credits(message):
+    user_language = get_user_language(message.chat.id)
+    recharge_message = get_message(user_language, "recharge_message")
+    bot.send_message(message.chat.id, recharge_message)
+
 @bot.message_handler(commands=["chat"])
 def start_chat(message):
     user_language = get_user_language(message.chat.id)
-    chat_message = get_message(user_language, "chat_message")
-    bot.send_message(message.chat.id, chat_message)
-    bot.register_next_step_handler(message, continue_chat)
+    
+    if check_credits(message.chat.id, 1):
+        chat = ChatOpenAI(temperature=0.5)
+        chat_message = get_message(user_language, "chat_message")
+        bot.send_message(message.chat.id, chat_message)
+        bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language))
+    
+    else:
+        insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
+        bot.send_message(message.chat.id, insufficient_credits_message)
 
 
-def continue_chat(message):
+def continue_chat(message, chat, user_language):
     try: 
-        user_language = get_user_language(message.chat.id)
-        
-        if message.text.lower() == "/stop":
+        if message.text.lower().startswith("/"):
             bot.send_message(message.chat.id, "Conversation stopped.")
             return
-        
+
         if check_credits(message.chat.id, 1):
-            chat = ChatOpenAI(temperature=0.5) 
-            messages = [HumanMessage(content=message.text)]
+            markup = ReplyKeyboardMarkup()
+            markup.add(KeyboardButton('/stop'))
             
+            messages = [HumanMessage(content=message.text)]
             response = chat.invoke(messages)
             reduce_credits(message.chat.id, 1)
-            
-            bot.send_message(message.chat.id, response.content)
-            bot.register_next_step_handler(message, continue_chat)
+                
+            bot.send_message(message.chat.id, response.content, reply_markup=markup)
+            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language))
         
         else:
             insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
             bot.send_message(message.chat.id, insufficient_credits_message)
-
+        
     except:
         failure_message = get_message(user_language, "failure_message")
         bot.send_message(message.chat.id, failure_message)

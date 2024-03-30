@@ -4,5 +4,7 @@
     "chat_message" : "You can chat with GPT here",
     "credits_message": "Your current credits: {credits}",
     "failure_message" : "Unexpected Error",
-    "insufficient_credits_message" : "Credits are insufficient, kindly recharge"
+    "insufficient_credits_message" : "Credits are insufficient, kindly recharge",
+    "recharge_message" : "We are adding credits to your account",
+    "recharge_success_message" : "15 Credits added to your account"
 }
