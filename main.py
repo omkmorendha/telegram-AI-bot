@@ -303,7 +303,9 @@ def assistant(call):
 def continue_chat(message, chat, user_language, token, system_message=None):
     try: 
         if message.text.lower().startswith("/"):
-            bot.send_message(message.chat.id, "Conversation stopped.")
+            bot.send_message(message.chat.id, "Conversation has ended.")
+            message_to_send = get_message(user_language, "menu_message")
+            bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
             return
 
         if check_credits(message.chat.id, token):
