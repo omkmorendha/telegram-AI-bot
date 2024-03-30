@@ -1,10 +1,11 @@
 {
-    "start_message" : "Hello Welcome to Cognyx BOT",
-    "menu_message" : "This is the menu",
-    "chat_message" : "You can chat with GPT here",
+    "start_message": "Hello! I am the most advanced *Artificial Intelligence* in the world (created by OpenAI). I can assist with *various tasks*. For instance:\n\n- Composing social media posts, essays, or emails\n- Coding assistance, including writing and debugging\n- Creating artwork\n- Translating text into any language more effectively than Google Translate\n- Solving homework assignments\n- Proofreading text for errors\n- Acting as your personal psychologist\n\n... Essentially, I am capable of *anything*!",
+    "menu_message": "Hi! I'm CognyxAI bot 🤖 \n\n*Commands:* \n\u2022 /menu : Show Menu \n\u2022 /functions : Show available functions \n\u2022 /credits : Show Credits \n\u2022 /recharge : Add 15 Credits \n\u2022 /chat : Chat with GPT 3.5 Turbo \n\n🧠 *GPT-4 Turbo* is available now in /settings!",
+    "chat_message": "You can chat with GPT here",
     "credits_message": "Your current credits: {credits}",
-    "failure_message" : "Unexpected Error",
-    "insufficient_credits_message" : "Credits are insufficient, kindly recharge",
-    "recharge_message" : "We are adding credits to your account",
-    "recharge_success_message" : "15 Credits added to your account"
+    "failure_message": "Unexpected Error",
+    "insufficient_credits_message": "Credits are insufficient, kindly recharge",
+    "recharge_message": "We are adding credits to your account",
+    "recharge_success_message": "15 Credits added to your account",
+    "conversation_end": "Conversation has stopped"
 }

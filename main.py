@@ -1,5 +1,5 @@
 from telebot import TeleBot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -20,6 +20,12 @@ with open("messages_eng.json", "r") as json_file:
     strings_eng = json.load(json_file)
 
 
+settings = {
+    "gpt-3.5-turbo" : 1,
+    "gpt-4" : 5,
+}
+
+
 def get_message(language, key):
     if language == "eng":
         return strings_eng.get(key, "")
@@ -37,7 +43,8 @@ def create_users_table():
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             telegram_id VARCHAR,
             language VARCHAR,
-            credits INTEGER
+            credits INTEGER,
+            model VARCHAR
         )
     """
     )
@@ -57,16 +64,16 @@ def drop_tables():
     print("Tables dropped successfully.")
 
 
-def add_user(telegram_id, initial_credits=15, initial_language="eng"):
+def add_user(telegram_id, initial_credits=15, initial_language="eng", model="gpt-3.5-turbo"):
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     try:
         cursor.execute(
             """
-            INSERT INTO users (telegram_id, credits, language)
-            VALUES (%s, %s, %s)
+            INSERT INTO users (telegram_id, credits, language, model)
+            VALUES (%s, %s, %s, %s)
         """,
-            (str(telegram_id), initial_credits, initial_language),
+            (str(telegram_id), initial_credits, initial_language, model),
         )
         conn.commit()
         print("User added successfully!")
@@ -102,6 +109,21 @@ def get_user_language(telegram_id):
         return result[0]
     else:
         return "eng"
+
+
+def get_user_model(telegram_id):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT model FROM users WHERE telegram_id = %s", (str(telegram_id),)
+    )
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if result:
+        return result[0]
+    else:
+        return "gpt-3.5-turbo"
 
 
 def reduce_credits(chat_id, reduce_by):
@@ -224,15 +246,17 @@ def start(message):
 
     user_language = get_user_language(message.chat.id)
     message_to_send = get_message(user_language, "start_message")
+    menu_message = get_message(user_language, "menu_message")
 
-    bot.send_message(message.chat.id, message_to_send)
+    bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
+    bot.send_message(message.chat.id, menu_message, parse_mode= 'Markdown')
 
 
 @bot.message_handler(commands=["menu"])
 def menu(message):
     user_language = get_user_language(message.chat.id)
     message_to_send = get_message(user_language, "menu_message")
-    bot.send_message(message.chat.id, message_to_send)
+    bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
 
 
 @bot.message_handler(commands=["recharge"])
@@ -241,36 +265,39 @@ def recharge_credits(message):
     recharge_message = get_message(user_language, "recharge_message")
     bot.send_message(message.chat.id, recharge_message)
 
+
 @bot.message_handler(commands=["chat"])
 def start_chat(message):
     user_language = get_user_language(message.chat.id)
+    model = get_user_model(message.chat.id)
+    token = settings[model]
     
     if check_credits(message.chat.id, 1):
-        chat = ChatOpenAI(temperature=0.5)
+        chat = ChatOpenAI(temperature=0.5, model=model)
         chat_message = get_message(user_language, "chat_message")
         bot.send_message(message.chat.id, chat_message)
-        bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language))
+        bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token))
     
     else:
         insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
         bot.send_message(message.chat.id, insufficient_credits_message)
 
 
-def continue_chat(message, chat, user_language):
+def continue_chat(message, chat, user_language, token):
     try: 
         if message.text.lower().startswith("/"):
             bot.send_message(message.chat.id, "Conversation stopped.")
             return
 
-        if check_credits(message.chat.id, 1):
-            markup = ReplyKeyboardMarkup()
-            markup.add(KeyboardButton('/stop'))
+        if check_credits(message.chat.id, token):
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton(text='Go Back to Menu', callback_data='show-menu'))
             
             messages = [HumanMessage(content=message.text)]
             response = chat.invoke(messages)
-            reduce_credits(message.chat.id, 1)
+            reduce_credits(message.chat.id, token)
                 
-            bot.send_message(message.chat.id, response.content, reply_markup=markup)
+            bot.send_message(message.chat.id, response.content, reply_markup=markup, parse_mode="Markdown")
             bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language))
         
         else:
@@ -280,6 +307,17 @@ def continue_chat(message, chat, user_language):
     except:
         failure_message = get_message(user_language, "failure_message")
         bot.send_message(message.chat.id, failure_message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'show-menu')
+def stop_callback(call):
+    if call.data == 'show-menu':
+        user_language = get_user_language(call.message.chat.id)
+        menu_message = get_message(user_language, "menu_message")
+        conversation_end = get_message(user_language, "conversation_end")
+        
+        bot.send_message(call.message.chat.id, conversation_end)
+        bot.send_message(call.message.chat.id, menu_message, parse_mode= 'Markdown')
 
 
 if __name__ == "__main__":
