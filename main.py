@@ -103,6 +103,79 @@ def get_user_language(telegram_id):
         return "eng"
 
 
+def reduce_credits(chat_id, reduce_by):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE users
+            SET credits = GREATEST(0, credits - %s)
+            WHERE telegram_id = %s
+        """,
+            (reduce_by, str(chat_id)),
+        )
+        conn.commit()
+        print("Credits reduced successfully!")
+    except Exception as e:
+        print(f"Error reducing credits: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def check_credits(chat_id, required_credits):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT credits
+            FROM users
+            WHERE telegram_id = %s
+            """,
+            (str(chat_id),)
+        )
+        credits = cursor.fetchone()[0]
+        if credits >= required_credits:
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"Error checking credits: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@bot.message_handler(commands=["credits"])
+def show_credits(message):
+    user_language = get_user_language(message.chat.id)
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT credits
+            FROM users
+            WHERE telegram_id = %s
+            """,
+            (str(message.chat.id),)
+        )
+        credits = cursor.fetchone()[0]
+        credits_message = get_message(user_language, "credits_message").format(credits=credits)
+        bot.send_message(message.chat.id, credits_message)
+    
+    except Exception as e:
+        print(f"Error fetching credits: {e}")
+        failure_message = get_message(user_language, "failure_message")
+        bot.send_message(message.chat.id, failure_message)
+    
+    finally:
+        cursor.close()
+        conn.close()
+
 @bot.message_handler(commands=["start", "restart"])
 def start(message):
     if not user_exists(message.chat.id):
@@ -130,14 +203,30 @@ def start_chat(message):
 
 
 def continue_chat(message):
-    if message.text.lower() == "/stop":
-        bot.send_message(message.chat.id, "Conversation stopped.")
-        return
-    chat = ChatOpenAI(temperature=0.5) 
-    messages = [HumanMessage(content=message.text)]
-    response = chat.invoke(messages)
-    bot.send_message(message.chat.id, response.content)
-    bot.register_next_step_handler(message, continue_chat)
+    try: 
+        user_language = get_user_language(message.chat.id)
+        
+        if message.text.lower() == "/stop":
+            bot.send_message(message.chat.id, "Conversation stopped.")
+            return
+        
+        if check_credits(message.chat.id, 1):
+            chat = ChatOpenAI(temperature=0.5) 
+            messages = [HumanMessage(content=message.text)]
+            
+            response = chat.invoke(messages)
+            reduce_credits(message.chat.id, 1)
+            
+            bot.send_message(message.chat.id, response.content)
+            bot.register_next_step_handler(message, continue_chat)
+        
+        else:
+            insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
+            bot.send_message(message.chat.id, insufficient_credits_message)
+
+    except:
+        failure_message = get_message(user_language, "failure_message")
+        bot.send_message(message.chat.id, failure_message)
 
 
 if __name__ == "__main__":

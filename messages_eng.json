@@ -1,5 +1,8 @@
 {
     "start_message" : "Hello Welcome to Cognyx BOT",
     "menu_message" : "This is the menu",
-    "chat_message" : "You can chat with GPT here"
+    "chat_message" : "You can chat with GPT here",
+    "credits_message": "Your current credits: {credits}",
+    "failure_message" : "Unexpected Error",
+    "insufficient_credits_message" : "Credits are insufficient, kindly recharge"
 }
