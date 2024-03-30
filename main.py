@@ -11,7 +11,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 load_dotenv()
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URLl")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 bot = TeleBot(BOT_TOKEN)
@@ -20,7 +20,7 @@ with open("messages_eng.json", "r") as json_file:
     strings_eng = json.load(json_file)
 
 
-settings = {
+model_settings = {
     "gpt-3.5-turbo" : 1,
     "gpt-4" : 5,
 }
@@ -270,7 +270,7 @@ def recharge_credits(message):
 def start_chat(message):
     user_language = get_user_language(message.chat.id)
     model = get_user_model(message.chat.id)
-    token = settings[model]
+    token = model_settings[model]
     
     if check_credits(message.chat.id, 1):
         chat = ChatOpenAI(temperature=0.5, model=model)
@@ -298,7 +298,7 @@ def continue_chat(message, chat, user_language, token):
             reduce_credits(message.chat.id, token)
                 
             bot.send_message(message.chat.id, response.content, reply_markup=markup, parse_mode="Markdown")
-            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language))
+            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token))
         
         else:
             insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
@@ -318,6 +318,57 @@ def stop_callback(call):
         
         bot.send_message(call.message.chat.id, conversation_end)
         bot.send_message(call.message.chat.id, menu_message, parse_mode= 'Markdown')
+
+
+def update_user_model(chat_id, model):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE users
+            SET model = %s
+            WHERE telegram_id = %s
+        """,
+            (model, str(chat_id)),
+        )
+        conn.commit()
+        print("Model changed successfully!")
+    except Exception as e:
+        print(f"Error changing model: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+    
+
+@bot.message_handler(commands=["settings"])
+def settings_message(message):
+    user_language = get_user_language(message.chat.id)
+    model = get_user_model(message.chat.id)
+    
+    settings_message = get_message(user_language, "settings_message")
+
+    keyboard = InlineKeyboardMarkup()
+    button_gpt_35_turbo = InlineKeyboardButton("GPT-3.5-Turbo", callback_data="gpt_3.5_turbo")
+    button_gpt_4 = InlineKeyboardButton("GPT-4", callback_data="gpt_4")
+    keyboard.row(button_gpt_35_turbo, button_gpt_4)
+
+    bot.send_message(message.chat.id, settings_message.format(model=model), reply_markup=keyboard, parse_mode='Markdown')
+    
+    message_to_send = get_message(user_language, "menu_message")
+    bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
+
+
+@bot.callback_query_handler(func=lambda call: call.data in ["gpt_3.5_turbo", "gpt_4"])
+def settings_callback(call):
+    update_user_model(call.message.chat.id, call.data.replace('_', '-'))
+    
+    user_language = get_user_language(call.message.chat.id)
+    model = get_user_model(call.message.chat.id)
+    model_update_message = get_message(user_language, "model_update_message")
+    
+    bot.send_message(call.message.chat.id, model_update_message.format(model=model), parse_mode='Markdown')
+    bot.register_next_step_handler(call.message, menu)
 
 
 if __name__ == "__main__":

@@ -7,5 +7,7 @@
     "insufficient_credits_message": "Credits are insufficient, kindly recharge",
     "recharge_message": "We are adding credits to your account",
     "recharge_success_message": "15 Credits added to your account",
-    "conversation_end": "Conversation has stopped"
+    "conversation_end": "Conversation has stopped",
+    "settings_message": "Choose your preferred model, you are currently using *{model}*" ,
+    "model_update_message": "Model has been successfully changed to *{model}*"
 }
