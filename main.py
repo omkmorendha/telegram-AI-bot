@@ -11,7 +11,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 load_dotenv()
 
-DATABASE_URL = os.environ.get("DATABASE_URLl")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 bot = TeleBot(BOT_TOKEN)
@@ -283,6 +283,23 @@ def start_chat(message):
         bot.send_message(message.chat.id, insufficient_credits_message)
 
 
+@bot.callback_query_handler(func=lambda call: call.data == 'assistant')
+def assistant(call):
+    user_language = get_user_language(call.message.chat.id)
+    model = get_user_model(call.message.chat.id)
+    token = model_settings[model]
+    
+    if check_credits(call.message.chat.id, token):
+        chat = ChatOpenAI(temperature=0.5, model=model)
+        chat_message = get_message(user_language, "assistant_greeting_message")
+        bot.send_message(call.message.chat.id, chat_message)
+        bot.register_next_step_handler(call.message, lambda msg: continue_chat(msg, chat, user_language, token))
+    
+    else:
+        insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
+        bot.send_message(call.message.chat.id, insufficient_credits_message)
+
+
 def continue_chat(message, chat, user_language, token):
     try: 
         if message.text.lower().startswith("/"):
@@ -371,6 +388,59 @@ def settings_callback(call):
     bot.register_next_step_handler(call.message, menu)
 
 
+@bot.message_handler(commands=["functions"])
+def functions_message(message):
+    user_language = get_user_language(message.chat.id)
+    functions_message = get_message(user_language, "functions_message")
+    assistant_message = get_message(user_language, "assistant_message")
+    code_helper_message = get_message(user_language, "code_helper_message")
+    
+    keyboard = InlineKeyboardMarkup()
+    button_assistant = InlineKeyboardButton(assistant_message, callback_data="assistant")
+    button_code_helper = InlineKeyboardButton(code_helper_message, callback_data="code_helper")
+    keyboard.row(button_assistant)
+    keyboard.row(button_code_helper)
+    
+    bot.send_message(message.chat.id, functions_message, reply_markup=keyboard, parse_mode='Markdown')
+
+
+def code_helper(message):
+    try:
+        user_language = get_user_language(message.chat.id)
+        model = get_user_model(message.chat.id)
+        token = model_settings[model]
+        
+        if check_credits(message.chat.id, token):
+            chat = ChatOpenAI(temperature=0.5, model=model)
+         
+            if message.text.lower().startswith("/"):
+                bot.send_message(message.chat.id, "Conversation stopped.")
+                return
+
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton(text='Go Back to Menu', callback_data='show-menu'))
+            
+            messages = [SystemMessage("You are a tool that helps people with coding, answer accordingly"), HumanMessage(content=message.text)]
+            response = chat.invoke(messages)
+            reduce_credits(message.chat.id, token)
+                
+            bot.send_message(message.chat.id, response.content, reply_markup=markup, parse_mode="Markdown")
+            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token))
+        
+        else:
+            insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
+            bot.send_message(message.chat.id, insufficient_credits_message)
+        
+    except:
+        failure_message = get_message(user_language, "failure_message")
+        bot.send_message(message.chat.id, failure_message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data in ["code_helper"])
+def function_handler(call):
+    if call.data == "code_helper":
+        code_helper(call.message)
+        
 if __name__ == "__main__":
     # drop_tables()
     # create_users_table()

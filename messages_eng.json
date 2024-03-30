@@ -9,5 +9,9 @@
     "recharge_success_message": "15 Credits added to your account",
     "conversation_end": "Conversation has stopped",
     "settings_message": "Choose your preferred model, you are currently using *{model}*" ,
-    "model_update_message": "Model has been successfully changed to *{model}*"
+    "model_update_message": "Model has been successfully changed to *{model}*",
+    "functions_message": "Select the functionality that you would like to use",
+    "assistant_message": "Assistant",
+    "assistant_greetint_message" : "Hello, I am your personal assistant, how may I help you",
+    "code_helper_message": "Code Helper"
 }
