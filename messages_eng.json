@@ -1,3 +1,5 @@
 {
-    "start_message" : "Hello Welcome to Cognyx BOT"
+    "start_message" : "Hello Welcome to Cognyx BOT",
+    "menu_message" : "This is the menu",
+    "chat_message" : "You can chat with GPT here"
 }

@@ -1,4 +1,7 @@
 from telebot import TeleBot
+from langchain_openai import OpenAI, ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain_core.messages import HumanMessage, SystemMessage
 import json
 import os
 from dotenv import load_dotenv
@@ -7,14 +10,13 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 load_dotenv()
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 bot = TeleBot(BOT_TOKEN)
 
 with open("messages_eng.json", "r") as json_file:
     strings_eng = json.load(json_file)
-
-DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def get_message(language, key):
@@ -119,7 +121,26 @@ def menu(message):
     bot.send_message(message.chat.id, message_to_send)
 
 
+@bot.message_handler(commands=["chat"])
+def start_chat(message):
+    user_language = get_user_language(message.chat.id)
+    chat_message = get_message(user_language, "chat_message")
+    bot.send_message(message.chat.id, chat_message)
+    bot.register_next_step_handler(message, continue_chat)
+
+
+def continue_chat(message):
+    if message.text.lower() == "/stop":
+        bot.send_message(message.chat.id, "Conversation stopped.")
+        return
+    chat = ChatOpenAI(temperature=0.5) 
+    messages = [HumanMessage(content=message.text)]
+    response = chat.invoke(messages)
+    bot.send_message(message.chat.id, response.content)
+    bot.register_next_step_handler(message, continue_chat)
+
+
 if __name__ == "__main__":
-    drop_tables()
-    create_users_table()
+    # drop_tables()
+    # create_users_table()
     bot.infinity_polling()
