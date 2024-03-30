@@ -300,7 +300,7 @@ def assistant(call):
         bot.send_message(call.message.chat.id, insufficient_credits_message)
 
 
-def continue_chat(message, chat, user_language, token):
+def continue_chat(message, chat, user_language, token, system_message=None):
     try: 
         if message.text.lower().startswith("/"):
             bot.send_message(message.chat.id, "Conversation stopped.")
@@ -310,12 +310,16 @@ def continue_chat(message, chat, user_language, token):
             markup = InlineKeyboardMarkup()
             markup.add(InlineKeyboardButton(text='Go Back to Menu', callback_data='show-menu'))
             
-            messages = [HumanMessage(content=message.text)]
+            if system_message != None:
+                messages = [SystemMessage(system_message), HumanMessage(content=message.text)]
+            else:
+                messages = [HumanMessage(content=message.text)]
+            
             response = chat.invoke(messages)
             reduce_credits(message.chat.id, token)
                 
             bot.send_message(message.chat.id, response.content, reply_markup=markup, parse_mode="Markdown")
-            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token))
+            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token, system_message))
         
         else:
             insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
@@ -371,9 +375,6 @@ def settings_message(message):
     keyboard.row(button_gpt_35_turbo, button_gpt_4)
 
     bot.send_message(message.chat.id, settings_message.format(model=model), reply_markup=keyboard, parse_mode='Markdown')
-    
-    message_to_send = get_message(user_language, "menu_message")
-    bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ["gpt_3.5_turbo", "gpt_4"])
@@ -385,7 +386,9 @@ def settings_callback(call):
     model_update_message = get_message(user_language, "model_update_message")
     
     bot.send_message(call.message.chat.id, model_update_message.format(model=model), parse_mode='Markdown')
-    bot.register_next_step_handler(call.message, menu)
+    
+    message_to_send = get_message(user_language, "menu_message")
+    bot.send_message(call.message.chat.id, message_to_send, parse_mode= 'Markdown')
 
 
 @bot.message_handler(commands=["functions"])
@@ -394,12 +397,16 @@ def functions_message(message):
     functions_message = get_message(user_language, "functions_message")
     assistant_message = get_message(user_language, "assistant_message")
     code_helper_message = get_message(user_language, "code_helper_message")
+    email_writer_message = get_message(user_language, "email_writer_message")
     
     keyboard = InlineKeyboardMarkup()
     button_assistant = InlineKeyboardButton(assistant_message, callback_data="assistant")
     button_code_helper = InlineKeyboardButton(code_helper_message, callback_data="code_helper")
+    button_email_writer = InlineKeyboardButton(email_writer_message, callback_data="email_writer")
+    
     keyboard.row(button_assistant)
     keyboard.row(button_code_helper)
+    keyboard.row(button_email_writer)
     
     bot.send_message(message.chat.id, functions_message, reply_markup=keyboard, parse_mode='Markdown')
 
@@ -417,15 +424,12 @@ def code_helper(message):
                 bot.send_message(message.chat.id, "Conversation stopped.")
                 return
 
-            markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton(text='Go Back to Menu', callback_data='show-menu'))
+            code_helper_greeting_message = get_message(user_language, "code_helper_greeting_message")
+            bot.send_message(message.chat.id, code_helper_greeting_message)
             
-            messages = [SystemMessage("You are a tool that helps people with coding, answer accordingly"), HumanMessage(content=message.text)]
-            response = chat.invoke(messages)
-            reduce_credits(message.chat.id, token)
+            system_message = "You are a tool that helps people with coding, answer accordingly"
                 
-            bot.send_message(message.chat.id, response.content, reply_markup=markup, parse_mode="Markdown")
-            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token))
+            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token, system_message))
         
         else:
             insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
@@ -436,11 +440,42 @@ def code_helper(message):
         bot.send_message(message.chat.id, failure_message)
 
 
-@bot.callback_query_handler(func=lambda call: call.data in ["code_helper"])
+def email_writer(message):
+    try:
+        user_language = get_user_language(message.chat.id)
+        model = get_user_model(message.chat.id)
+        token = model_settings[model]
+        
+        if check_credits(message.chat.id, token):
+            chat = ChatOpenAI(temperature=0.5, model=model)
+         
+            if message.text.lower().startswith("/"):
+                bot.send_message(message.chat.id, "Conversation stopped.")
+                return
+
+            code_helper_greeting_message = get_message(user_language, "email_writer_greeting_message")
+            bot.send_message(message.chat.id, code_helper_greeting_message)
+            
+            system_message = "You are a tool that helps people with writing emails, write an email for the given prompt"
+                
+            bot.register_next_step_handler(message, lambda msg: continue_chat(msg, chat, user_language, token, system_message))
+        
+        else:
+            insufficient_credits_message = get_message(user_language, "insufficient_credits_message")
+            bot.send_message(message.chat.id, insufficient_credits_message)
+        
+    except:
+        failure_message = get_message(user_language, "failure_message")
+        bot.send_message(message.chat.id, failure_message)
+
+@bot.callback_query_handler(func=lambda call: call.data in ["code_helper", "email_writer"])
 def function_handler(call):
     if call.data == "code_helper":
         code_helper(call.message)
-        
+    
+    elif call.data == "email_writer":
+        email_writer(call.message)
+            
 if __name__ == "__main__":
     # drop_tables()
     # create_users_table()

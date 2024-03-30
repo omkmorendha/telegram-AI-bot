@@ -12,6 +12,9 @@
     "model_update_message": "Model has been successfully changed to *{model}*",
     "functions_message": "Select the functionality that you would like to use",
     "assistant_message": "Assistant",
-    "assistant_greetint_message" : "Hello, I am your personal assistant, how may I help you",
-    "code_helper_message": "Code Helper"
+    "assistant_greeting_message" : "Hello, I am your personal assistant, how may I help you",
+    "code_helper_message": "Code Helper",
+    "code_helper_greeting_message" : "As an AI, I can assist with a variety of coding-related tasks. Here are some functionalities I can provide:\n\n 1. Debugging: I can help you find errors in your code. \n 2. Code Review: I can review your code and suggest improvements. \n3. Syntax Help: I can assist with understanding the syntax of various programming languages. \n4. Code Generation: I can generate simple code snippets based on your requirements. \n5. Learning Resources: I can provide resources for learning different programming languages. \n6. Algorithm Explanation: I can explain the working of various algorithms. \n7. Code Optimization: I can suggest ways to optimize your code for better performance. \n\nPlease specify the functionality you would like to use.",
+    "email_writer_message" : "Email Writer",
+    "email_writer_greeting_message" : "Hello, what email would you like to write"
 }
