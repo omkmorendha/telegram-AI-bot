@@ -1,8 +1,10 @@
 from telebot import TeleBot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+import telebot
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage, SystemMessage
+from flask import Flask, request
 import json
 import os
 from dotenv import load_dotenv
@@ -11,10 +13,14 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 load_dotenv()
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL") + "?sslmode=require"
+print(DATABASE_URL)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+URL = os.environ.get("URL")
 
-bot = TeleBot(BOT_TOKEN)
+bot = TeleBot(BOT_TOKEN, threaded=False)
+bot.remove_webhook()
+bot.set_webhook(url=URL)
 
 with open("messages_eng.json", "r") as json_file:
     strings_eng = json.load(json_file)
@@ -24,6 +30,14 @@ model_settings = {
     "gpt-3.5-turbo" : 1,
     "gpt-4" : 5,
 }
+
+app = Flask(__name__)
+@app.route('/', methods=['POST'])
+def webhook():
+    update = telebot.types.Update.de_json(request.stream.read().decode('utf8'))
+    print(update)
+    bot.process_new_updates([update])
+    return 'ok', 200
 
 
 def get_message(language, key):
@@ -478,7 +492,9 @@ def function_handler(call):
     elif call.data == "email_writer":
         email_writer(call.message)
             
+            
 if __name__ == "__main__":
     # drop_tables()
     # create_users_table()
-    bot.infinity_polling()
+    # bot.infinity_polling()
+    app.run(host="0.0.0.0", debug=True)
