@@ -33,8 +33,8 @@ model_settings = {
 
 app = Flask(__name__)
 @app.route('/', methods=['POST'])
-def webhook():
-    update = telebot.types.Update.de_json(request.stream.read().decode('utf8'))
+def webhook(request):
+    update = telebot.types.Update.de_json(request.data.decode('utf8'))
     print(update)
     bot.process_new_updates([update])
     return 'ok', 200
@@ -264,6 +264,7 @@ def start(message):
 
     bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
     bot.send_message(message.chat.id, menu_message, parse_mode= 'Markdown')
+    functions_message(message)
 
 
 @bot.message_handler(commands=["menu"])
@@ -271,6 +272,7 @@ def menu(message):
     user_language = get_user_language(message.chat.id)
     message_to_send = get_message(user_language, "menu_message")
     bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
+    functions_message(message)
 
 
 @bot.message_handler(commands=["recharge"])
@@ -317,9 +319,9 @@ def assistant(call):
 def continue_chat(message, chat, user_language, token, system_message=None):
     try: 
         if message.text.lower().startswith("/"):
-            bot.send_message(message.chat.id, "Conversation has ended.")
             message_to_send = get_message(user_language, "menu_message")
             bot.send_message(message.chat.id, message_to_send, parse_mode= 'Markdown')
+            functions_message(message)
             return
 
         if check_credits(message.chat.id, token):
@@ -351,10 +353,9 @@ def stop_callback(call):
     if call.data == 'show-menu':
         user_language = get_user_language(call.message.chat.id)
         menu_message = get_message(user_language, "menu_message")
-        conversation_end = get_message(user_language, "conversation_end")
-        
-        bot.send_message(call.message.chat.id, conversation_end)
+
         bot.send_message(call.message.chat.id, menu_message, parse_mode= 'Markdown')
+        functions_message(call.message)
 
 
 def update_user_model(chat_id, model):
@@ -405,6 +406,7 @@ def settings_callback(call):
     
     message_to_send = get_message(user_language, "menu_message")
     bot.send_message(call.message.chat.id, message_to_send, parse_mode= 'Markdown')
+    functions_message(call.message)
 
 
 @bot.message_handler(commands=["functions"])
@@ -437,7 +439,6 @@ def code_helper(message):
             chat = ChatOpenAI(temperature=0.5, model=model)
          
             if message.text.lower().startswith("/"):
-                bot.send_message(message.chat.id, "Conversation stopped.")
                 return
 
             code_helper_greeting_message = get_message(user_language, "code_helper_greeting_message")
@@ -466,7 +467,6 @@ def email_writer(message):
             chat = ChatOpenAI(temperature=0.5, model=model)
          
             if message.text.lower().startswith("/"):
-                bot.send_message(message.chat.id, "Conversation stopped.")
                 return
 
             code_helper_greeting_message = get_message(user_language, "email_writer_greeting_message")
